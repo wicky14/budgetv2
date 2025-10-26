@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catatan Anggaran Sederhana | Profesional</title>
+    <meta name="description" content="Aplikasi catatan anggaran sederhana, offline-first, menggunakan IndexedDB.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+    
+    <script src="https://unpkg.com/idb-keyval@6.2.1/dist/umd.js"></script> 
+
+    <style>
+        /* Impor font profesional: Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            /* --- PROFESSIONAL COLOR PALETTE --- */
+            --color-text-dark: #1F2937;    /* Primary: Dark Charcoal */
+            --color-text-light: #6B7280;   /* Secondary: Muted Gray */
+            --color-background: #F9FAFB;   /* Page Background: Very Light Gray */
+            --color-surface: #FFFFFF;      /* Card/Surface: Pure White */
+            --color-primary-accent: #1D4ED8; /* Deep Blue Accent (Blue-700) */
+            
+            /* Transaction/Indicator Colors (Muted and Clear) */
+            --color-income: #059669;       /* Deep Green (Emerald-600) */
+            --color-expense: #DC2626;      /* Deep Red (Red-600) */
+
+            /* Border & Shadow */
+            --color-border: #E5E7EB;       /* Light, subtle border */
+            --shadow-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* Modern shadow */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif, 'Segoe UI'; /* Prioritize Inter */
+        }
+
+        body {
+            background-color: var(--color-background);
+            padding-bottom: 70px;
+            color: var(--color-text-dark);
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: var(--color-surface);
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--color-primary-accent); /* Use primary accent for header */
+            color: white;
+            padding: 18px 20px; /* Increased padding */
+            text-align: center;
+            font-size: 1.25em; 
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* --- Tabs & Navigation (Bottom Bar) --- */
+        #tabs {
+            display: flex;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: var(--color-surface);
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -2px rgba(0, 0, 0, 0.06); /* Stronger bottom shadow */
+            z-index: 100;
+        }
+
+        .tab-btn {
+            flex-grow: 1;
+            padding: 14px 5px; /* Increased padding */
+            border: none;
+            background-color: var(--color-surface);
+            color: var(--color-text-light);
+            cursor: pointer;
+            font-size: 0.85rem; 
+            transition: color 0.3s, border-top 0.3s;
+            border-top: 2px solid transparent; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.2;
+        }
+        /* Style the emoji/text to be more centered/stacked */
+        .tab-btn::before {
+            content: attr(data-icon);
+            font-size: 1.2rem;
+            margin-bottom: 2px;
+        }
+        .tab-btn.active {
+            background-color: var(--color-surface);
+            color: var(--color-primary-accent);
+            border-top: 2px solid var(--color-primary-accent);
+            font-weight: 600;
+        }
+
+        .view-content {
+            padding: 24px 20px; /* Consistent, ample padding */
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        /* FIX: Ensure active view is visible and fully opaque */
+        .view-content.active {
+            display: block !important;
+            opacity: 1 !important;
+        }
+
+        .view-content h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--color-text-dark);
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 10px;
+        }
+        .view-content h3 {
+             font-size: 1.2rem;
+             font-weight: 600;
+             color: var(--color-primary-accent);
+             margin: 20px 0 10px 0;
+        }
+        
+        /* --- Forms & Inputs --- */
+        form {
+            background-color: var(--color-surface); 
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-subtle); 
+            margin-bottom: 20px;
+            border: 1px solid var(--color-border);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500; 
+            color: var(--color-text-dark);
+            font-size: 0.95rem;
+        }
+
+        input[type="text"], input[type="number"], input[type="date"], textarea, select,
+        input[type="password"]
+        {
+            width: 100%;
+            padding: 12px; 
+            margin-bottom: 16px;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 1rem;
+            color: var(--color-text-dark);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            border-color: var(--color-primary-accent);
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.2); 
+            outline: none;
+        }
+        
+        input[type="radio"] {
+            /* Hide the actual radio button */
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .radio-group {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 16px;
+            gap: 10px;
+        }
+
+        .radio-group label {
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 15px;
+            flex-grow: 1;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .radio-group input:checked + label {
+            background-color: var(--color-primary-accent);
+            color: white;
+            border-color: var(--color-primary-accent);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--color-primary-accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            line-height: 1.2;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background-color: #1E40AF; 
+            box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
+        }
+        .submit-btn:disabled {
+            background-color: #9CA3AF;
+            cursor: not-allowed;
+        }
+        
+        /* --- Summary Section --- */
+        .summary-section {
+            display: flex;
+            justify-content: space-between; 
+            margin-bottom: 20px;
+            text-align: center;
+            gap: 10px; 
+        }
+
+        .summary-card {
+            flex: 1;
+            padding: 15px 10px; 
+            border-radius: 8px;
+            box-shadow: var(--shadow-subtle);
+            background-color: var(--color-surface);
+            border-left: 4px solid; 
+        }
+
+        #daily-total-income { border-left-color: var(--color-income); }
+        #daily-total-expense { border-left-color: var(--color-expense); }
+        #plan-total-income { border-left-color: var(--color-income); }
+        #plan-total-expense { border-left-color: var(--color-expense); }
+
+        /* MODIFIKASI: Styling untuk ringkasan harian di tab Catat */
+        .daily-summary-on-new-note {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: var(--color-background);
+            box-shadow: var(--shadow-subtle);
+            border: 1px solid var(--color-border);
+        }
+        .daily-summary-on-new-note h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            color: var(--color-text-dark);
+            text-align: center;
+        }
+        .daily-summary-on-new-note .summary-section {
+            margin-bottom: 0; /* Override default margin */
+        }
+        /* END MODIFIKASI */
+
+        .summary-title {
+            font-size: 0.85em;
+            color: var(--color-text-light);
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .summary-amount {
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+        
+        .income { color: var(--color-income); }
+        .expense { color: var(--color-expense); }
+        .positive { color: var(--color-income); }
+        .negative { color: var(--color-expense); }
+        
+        /* --- List Styles (Daily & Plan) --- */
+        .notes-list, .plans-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .note-item, .plan-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px; 
+            margin-bottom: 12px;
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            box-shadow: var(--shadow-subtle);
+            border-left: 5px solid;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .note-item.masuk { border-left-color: var(--color-income); }
+        .note-item.keluar { border-left-color: var(--color-expense); }
+        .plan-item.masuk { border-left-color: var(--color-income); }
+        .plan-item.keluar { border-left-color: var(--color-expense); }
+
+        .note-details {
+            flex-grow: 1;
+            padding-right: 15px;
+        }
+
+        .note-type {
+            font-size: 0.85em;
+            color: var(--color-text-light);
+            font-weight: 500;
+        }
+        
+        .note-group {
+             font-size: 0.75em;
+             color: var(--color-text-light);
+             margin-bottom: 4px;
+             font-style: italic;
+        }
+
+        .note-amount {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        
+        .note-description {
+            font-size: 0.95em;
+            color: var(--color-text-dark);
+            margin-top: 4px;
+            word-break: break-word; 
+        }
+
+        .delete-btn {
+            background-color: var(--color-expense);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 34px; 
+            height: 34px;
+            cursor: pointer;
+            font-weight: bold;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        .delete-btn:hover {
+             background-color: #B91C1C;
+        }
+        
+        #empty-message, #monthly-empty-message, #plan-empty-message {
+            text-align: center;
+            color: var(--color-text-light);
+            padding: 20px;
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px dashed var(--color-border);
+        }
+
+        /* --- Monthly Summary Styles --- */
+        .monthly-card {
+            padding: 18px;
+            margin-bottom: 12px;
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            box-shadow: var(--shadow-subtle);
+            list-style: none;
+            border-left: 5px solid var(--color-primary-accent); 
+        }
+
+        .month-header {
+            display: block;
+            font-weight: 600;
+            font-size: 1.1em;
+            color: var(--color-primary-accent);
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 8px;
+        }
+
+        .month-details div {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 0.95em;
+        }
+        
+        .month-details .balance {
+            font-weight: 700;
+            font-size: 1.1em;
+            border-top: 1px solid var(--color-border); 
+            margin-top: 8px;
+            padding-top: 10px;
+        }
+
+        /* --- Cumulative Summary --- */
+        #cumulative-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        #cumulative-summary > div {
+            flex-basis: 100%; 
+            padding: 15px;
+            border-radius: 8px;
+            background-color: var(--color-surface);
+            box-shadow: var(--shadow-subtle);
+            text-align: center;
+            border: 2px solid; 
+        }
+        @media (min-width: 400px) {
+            #cumulative-summary > div:nth-child(1) { flex-basis: 100%; }
+            #cumulative-summary > div:nth-child(2),
+            #cumulative-summary > div:nth-child(3) { flex-basis: calc(50% - 5px); }
+        }
+
+        /* Default colors for cumulative */
+        #cumulative-balance-total { border-color: var(--color-primary-accent); }
+        #cumulative-balance-bulanan { border-color: #FF9800; } 
+        #cumulative-balance-tabungan { border-color: #2196F3; } 
+        
+        /* --- Image/Camera Styles --- */
+        .image-container {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        #image-preview-container {
+            margin-top: 10px;
+            display: none;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 5px;
+            background-color: #fff;
+        }
+
+        #image-preview {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 4px;
+        }
+        
+        .note-image-icon {
+            width: 30px;
+            height: 30px;
+            object-fit: cover;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+        }
+        
+        /* Full Image Modal */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 200; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.9); 
+        }
+
+        .modal-content {
+            margin: auto;
+            display: block;
+            width: 90%;
+            max-width: 700px;
+            margin-top: 50px;
+        }
+
+        #modal-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .close-modal:hover,
+        .close-modal:focus {
+            color: #bbb;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        /* --- Settings & Auth --- */
+        #auth-overlay {
+            background-color: var(--color-background);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 101;
+        }
+        
+        #auth-box {
+            background: var(--color-surface);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 350px;
+            width: 90%;
+        }
+
+        #auth-box h2 {
+            color: var(--color-primary-accent);
+            margin-bottom: 20px;
+        }
+        
+        /* Style untuk PIN Input */
+        #pin-input-container {
+             display: flex;
+             justify-content: center;
+             margin-bottom: 20px;
+             position: relative;
+             max-width: 240px;
+             margin-left: auto;
+             margin-right: auto;
+        }
+        
+        #pin-input {
+            width: 100%;
+            letter-spacing: 0.5rem;
+            text-align: center;
+            font-size: 1.5rem;
+            padding: 10px;
+            padding-right: 50px !important; 
+            margin-bottom: 0; 
+        }
+        
+        #toggle-pin-visibility {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--color-text-light);
+            padding: 5px;
+            z-index: 102;
+            line-height: 1;
+        }
+        
+        #auth-status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: var(--color-expense);
+        }
+        
+        #auth-instruction {
+            margin-bottom: 15px;
+            color: var(--color-text-light);
+            font-style: italic;
+        }
+        
+        .settings-group {
+             border: 1px solid var(--color-border);
+             padding: 20px;
+             border-radius: 8px;
+             margin-bottom: 15px;
+             background-color: var(--color-surface);
+             box-shadow: var(--shadow-subtle);
+        }
+        
+        .settings-group h3 {
+             color: var(--color-primary-accent);
+             font-size: 1.1rem;
+             margin-top: 0;
+             margin-bottom: 10px;
+        }
+        
+        /* MODIFIKASI: Style untuk input WA dipindah ke atas tombol */
+        .whatsapp-setting-form input {
+             margin-bottom: 16px; 
+             border-radius: 6px; 
+        }
+
+        .whatsapp-setting-form button {
+             border-radius: 6px; 
+             width: 100%; 
+        }
+        /* END MODIFIKASI */
+        
+        .warning-btn {
+             background-color: #F59E0B; /* Muted Orange */
+        }
+        .warning-btn:hover:not(:disabled) {
+             background-color: #D97706;
+        }
+        
+        .submit-btn[onclick*="shareAllPlansToWa"],
+        .share-wa-btn {
+            background-color: #10B981 !important; /* Tailwind Green 500 */
+        }
+        .submit-btn[onclick*="shareAllPlansToWa"]:hover:not(:disabled),
+        .share-wa-btn:hover:not(:disabled) {
+            background-color: #059669 !important; /* Tailwind Green 600 */
+        }
+        .submit-btn[onclick*="clearAllData"] {
+            background-color: var(--color-expense) !important;
+        }
+        .submit-btn[onclick*="clearAllData"]:hover {
+            background-color: #B91C1C !important;
+        }
+
+        /* --- Date Filter Section --- */
+        .filter-section {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            background-color: var(--color-background); 
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+        }
+
+        .filter-section.list-filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px;
+        }
+
+        .filter-group {
+            flex: 1;
+        }
+
+        .filter-group label {
+            font-size: 0.85em;
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .filter-section input[type="date"], 
+        .filter-section select {
+            padding: 10px;
+            font-size: 0.95rem;
+            margin-bottom: 0;
+            border-radius: 6px;
+        }
+        .filter-section select {
+            appearance: none; 
+            background: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236B7280'%3e%3cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3e%3c/svg%3e") no-repeat right 10px center;
+            background-size: 1.2em;
+            padding-right: 30px;
+        }
+        
+        .filter-section.date-only {
+             display: flex;
+             gap: 10px;
+             padding: 12px;
+        }
+        
+    </style>
+</head>
+<body>
+<div id="auth-overlay">
+        <div id="auth-box">
+            <h2>Kunci Akses Anggaran 🔒</h2>
+            <p id="auth-instruction">Masukkan PIN Akses 6 Digit Anda:</p>
+            
+            <div id="pin-input-container">
+                <input type="password" id="pin-input" placeholder="******" maxlength="6" pattern="\d{6}" inputmode="numeric">
+                <button type="button" id="toggle-pin-visibility">
+                    👁️
+                </button>
+            </div>
+            
+            <button class="submit-btn" id="pin-submit-btn">Buka Kunci</button>
+            <p id="auth-status"></p>
+            <button class="submit-btn warning-btn" id="reset-pin-btn" onclick="handlePinReset()" style="margin-top: 20px;">Lupa/Reset PIN</button>
+        </div>
+        </div>
+    
+    <div class="container" style="display: none;">
+        <header>
+            Catatan Anggaran Sederhana 📝
+        </header>
+
+        <div id="new-note-view" class="view-content active">
+            <h2>Tambah Transaksi Baru</h2>
+            
+            <div class="daily-summary-on-new-note">
+                <h3>Ringkasan Hari Ini</h3>
+                <div class="summary-section">
+                    <div class="summary-card" id="daily-total-income">
+                        <div class="summary-title">Masuk Hari Ini</div>
+                        <div class="summary-amount income" id="daily-total-income-amount">Rp 0</div>
+                    </div>
+                    <div class="summary-card" id="daily-total-expense">
+                        <div class="summary-title">Keluar Hari Ini</div>
+                        <div class="summary-amount expense" id="daily-total-expense-amount">Rp 0</div>
+                    </div>
+                </div>
+            </div>
+            <form id="budget-form">
+                
+                <label for="date">Tanggal Transaksi:</label>
+                <input type="date" id="date" required>
+                
+                <label>Jenis Transaksi:</label>
+                <div class="radio-group">
+                    <input type="radio" id="masuk" name="type" value="masuk" checked>
+                    <label for="masuk">Pemasukan 💰</label>
+                    
+                    <input type="radio" id="keluar" name="type" value="keluar">
+                    <label for="keluar">Pengeluaran 💸</label>
+                </div>
+                
+                <label for="group">Grup Anggaran:</label>
+                <select id="group" required>
+                    <option value="bulanan">Bulanan 🗓️</option>
+                    <option value="tabungan">Tabungan 🏦</option>
+                </select>
+
+                <label for="amount">Jumlah (Rp):</label>
+                <input type="text" id="amount" placeholder="Cth: 1.500.000" required>
+
+                <label for="note">Catatan/Keterangan:</label>
+                <textarea id="note" rows="3" required placeholder="Cth: Gaji bulanan, Beli kopi"></textarea>
+                
+                <div class="image-container">
+                    <button type="button" id="capture-image-btn" onclick="document.getElementById('image-input').click()" class="submit-btn" style="background-color: #4B5563;">Tambah Foto 📸</button>
+                    <input type="file" id="image-input" accept="image/*" style="display:none;">
+                    
+                    <div id="image-preview-container">
+                        <img id="image-preview" src="" alt="Preview Bukti Transaksi">
+                        <button type="button" onclick="removeImage()" class="submit-btn" style="margin-top: 5px; background-color: #6B7280; color: #fff;">Hapus Foto</button>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">Simpan Transaksi</button>
+            </form>
+        </div>
+
+        <div id="daily-view" class="view-content">
+            <h2>Daftar Catatan Harian</h2>
+            
+            <div class="filter-section list-filters">
+                <div class="filter-group">
+                    <label for="date-filter-daily-from">Dari Tanggal:</label>
+                    <input type="date" id="date-filter-daily-from">
+                </div>
+                <div class="filter-group">
+                    <label for="date-filter-daily-to">Sampai Tanggal:</label>
+                    <input type="date" id="date-filter-daily-to">
+                </div>
+                <div class="filter-group">
+                    <label for="type-filter">Filter Jenis:</label>
+                    <select id="type-filter">
+                        <option value="all">Semua Jenis</option>
+                        <option value="masuk">Pemasukan</option>
+                        <option value="keluar">Pengeluaran</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="group-filter-daily">Filter Grup:</label>
+                    <select id="group-filter-daily">
+                        <option value="all">Semua Grup</option>
+                        <option value="bulanan">Bulanan 🗓️</option>
+                        <option value="tabungan">Tabungan 🏦</option>
+                    </select>
+                </div>
+            </div>
+
+            <ul id="notes-list" class="notes-list">
+                </ul>
+            <p id="empty-message" style="display: none;">Belum ada catatan transaksi. Silakan tambahkan transaksi baru.</p>
+        </div>
+        
+        <div id="plan-view" class="view-content">
+            <h2>Daftar Rencana Anggaran</h2>
+
+            <div class="summary-section">
+                <div class="summary-card" id="plan-total-income">
+                    <div class="summary-title">Total Target Masuk</div>
+                    <div class="summary-amount income">Rp 0</div>
+                </div>
+                <div class="summary-card" id="plan-total-expense">
+                    <div class="summary-title">Total Target Keluar</div>
+                    <div class="summary-amount expense">Rp 0</div>
+                </div>
+            </div>
+            
+            <form id="plan-form">
+                <h3>Buat Rencana Baru</h3>
+                <label>Jenis Rencana:</label>
+                <div class="radio-group">
+                    <input type="radio" id="plan-masuk" name="plan-type" value="masuk" checked>
+                    <label for="plan-masuk">Target Masuk ⬆️</label>
+                    
+                    <input type="radio" id="plan-keluar" name="plan-type" value="keluar">
+                    <label for="plan-keluar">Target Keluar ⬇️</label>
+                </div>
+                
+                <label for="plan-date">Target Tanggal (Opsional):</label>
+                <input type="date" id="plan-date">
+                
+                <label for="plan-amount">Target Jumlah (Rp):</label>
+                <input type="text" id="plan-amount" placeholder="Cth: 500.000" required>
+                
+                <label for="plan-note">Catatan Rencana:</label>
+                <textarea id="plan-note" rows="2" required placeholder="Cth: Target nabung beli HP, Target bayar kos"></textarea>
+
+                <button type="submit" class="submit-btn" style="background-color: var(--color-primary-accent);">Simpan Rencana</button>
+            </form>
+            
+            <h3>Rencana Tersimpan</h3>
+            
+            <div class="filter-section date-only" style="background-color: var(--color-background);">
+                <div class="filter-group">
+                    <label for="date-filter-plan-from">Dari Tanggal Target:</label>
+                    <input type="date" id="date-filter-plan-from">
+                </div>
+                <div class="filter-group">
+                    <label for="date-filter-plan-to">Sampai Tanggal Target:</label>
+                    <input type="date" id="date-filter-plan-to">
+                </div>
+            </div>
+            
+            <ul id="plans-list" class="plans-list">
+                </ul>
+            <p id="plan-empty-message" style="display: none;">Belum ada rencana anggaran yang tersimpan.</p>
+            
+            <button id="share-all-plans-btn" class="submit-btn" style="margin-top: 15px;">Bagikan Semua Rencana ke WA 💬</button>
+            <button class="submit-btn warning-btn" style="margin-top: 10px;" onclick="clearAllPlans()">Hapus Semua Rencana</button>
+
+        </div>
+
+        <div id="monthly-summary-view" class="view-content">
+            <h2>Ringkasan Transaksi Bulanan</h2>
+            
+            <div id="cumulative-summary">
+                <div id="cumulative-balance-total">
+                    <div class="summary-title">Saldo Kumulatif (Total)</div>
+                    <div class="summary-amount">Rp 0</div>
+                </div>
+                <div id="cumulative-balance-bulanan">
+                    <div class="summary-title">Saldo Kumulatif (Bulanan)</div>
+                    <div class="summary-amount">Rp 0</div>
+                </div>
+                 <div id="cumulative-balance-tabungan">
+                    <div class="summary-title">Saldo Kumulatif (Tabungan)</div>
+                    <div class="summary-amount">Rp 0</div>
+                </div>
+            </div>
+            
+            <div class="filter-section list-filters" style="grid-template-columns: 1fr 1fr 1fr; background-color: var(--color-background);">
+                 <div class="filter-group" style="grid-column: span 3;">
+                    <label for="group-filter-monthly">Pilih Grup Summary:</label>
+                    <select id="group-filter-monthly">
+                        <option value="all">Total Semua Grup</option>
+                        <option value="bulanan">Grup Bulanan 🗓️</option>
+                        <option value="tabungan">Grup Tabungan 🏦</option>
+                    </select>
+                 </div>
+                 <div class="filter-group">
+                    <label for="date-filter-monthly-from">Dari Tanggal Transaksi:</label>
+                    <input type="date" id="date-filter-monthly-from">
+                </div>
+                <div class="filter-group" style="grid-column: span 2;">
+                    <label for="date-filter-monthly-to">Sampai Tanggal Transaksi:</label>
+                    <input type="date" id="date-filter-monthly-to">
+                </div>
+            </div>
+
+            <ul id="monthly-list">
+                </ul>
+            <p id="monthly-empty-message" style="display: none;">Belum ada data untuk ringkasan bulanan.</p>
+
+            <button type="button" onclick="exportMonthlySummary()" class="submit-btn" style="background-color: var(--color-primary-accent); margin-top: 15px;">Ekspor Ringkasan ke CSV</button>
+        </div>
+
+        <div id="settings-view" class="view-content">
+            <h2>Pengaturan & Data</h2>
+
+            <div class="settings-group">
+                <h3>Ubah PIN Akses</h3>
+                <form id="pin-change-form">
+                    <label for="new-pin">PIN Baru (6 Digit Angka):</label>
+                    <input type="number" id="new-pin" placeholder="******" maxlength="6" pattern="\d{6}" required>
+                    <button type="submit" class="submit-btn">Simpan PIN Baru</button>
+                </form>
+            </div>
+            
+            <div class="settings-group">
+                <h3>Pengaturan WhatsApp</h3>
+                <form id="whatsapp-setting-form">
+                    <label for="whatsapp-number">Nomor WhatsApp Tujuan (tanpa +62/0, cth: 81234567890):</label>
+                    <input type="text" id="whatsapp-number" placeholder="Nomor WhatsApp" pattern="[0-9]*" inputmode="numeric" required>
+                    <button type="submit" class="submit-btn" style="margin-top: 5px;">Simpan Nomor WA</button>
+                    <p style="font-size: 0.8em; color: var(--color-text-light); margin-top: 10px;">Nomor ini digunakan untuk fitur Bagikan/Share.</p>
+                </form>
+            </div>
+
+            <div class="settings-group">
+                <h3>Kelola Data</h3>
+                <button type="button" onclick="exportRawData()" class="submit-btn" style="background-color: var(--color-primary-accent); margin-bottom: 10px;">Ekspor Data Mentah (JSON)</button>
+                
+                <label for="import-file" class="submit-btn warning-btn" style="display: block; text-align: center; cursor: pointer;">Impor Data Mentah (JSON)</label>
+                <input type="file" id="import-file" accept="application/json" onchange="importRawData(event)" style="display: none;">
+                
+                <button type="button" onclick="clearAllData()" class="submit-btn" style="margin-top: 10px;">Hapus SEMUA Data</button>
+                <p style="font-size: 0.8em; color: var(--color-expense); margin-top: 5px;">Hapus semua transaksi, rencana, dan PIN Anda. Lakukan Ekspor (Backup) terlebih dahulu!</p>
+            </div>
+        </div>
+
+        <div id="image-modal" class="modal" onclick="this.style.display='none'">
+            <span class="close-modal">&times;</span>
+            <img class="modal-content" id="modal-image">
+        </div>
+        
+    </div>
+    
+    <div id="tabs" style="display: none;">
+        <button class="tab-btn active" data-tab="new-note-view" data-icon="➕">Catat</button>
+        <button class="tab-btn" data-tab="daily-view" data-icon="📜">Daftar</button>
+        <button class="tab-btn" data-tab="plan-view" data-icon="🎯">Rencana</button>
+        <button class="tab-btn" data-tab="monthly-summary-view" data-icon="📈">Ringkasan</button>
+        <button class="tab-btn" data-tab="settings-view" data-icon="⚙️">Atur</button>
+    </div>
+<script>
+        // Gunakan idbKeyval untuk IndexedDB (diimpor di head)
+        const idbKeyval = window.idbKeyval;
+
+        const form = document.getElementById('budget-form');
+        const notesList = document.getElementById('notes-list');
+        const emptyMessageDaily = document.getElementById('empty-message');
+        const monthlyList = document.getElementById('monthly-list');
+        const emptyMessageMonthly = document.getElementById('monthly-empty-message');
+        const dateInput = document.getElementById('date');
+        const amountInput = document.getElementById('amount'); 
+        const typeFilterSelect = document.getElementById('type-filter');
+        
+        const groupInput = document.getElementById('group'); 
+        const LAST_GROUP_KEY = 'lastSelectedGroup'; 
+
+        // Ringkasan harian sekarang di tab 'Catat'
+        const totalIncomeEl = document.querySelector('#daily-total-income .summary-amount');
+        const totalExpenseEl = document.querySelector('#daily-total-expense .summary-amount');
+        
+        // Elemen Saldo Kumulatif 
+        const cumulativeTotalEl = document.querySelector('#cumulative-balance-total .summary-amount');
+        const cumulativeBulananEl = document.querySelector('#cumulative-balance-bulanan .summary-amount');
+        const cumulativeTabunganEl = document.querySelector('#cumulative-balance-tabungan .summary-amount');
+        
+        // Filter Grup Bulanan
+        const monthlyGroupFilter = document.getElementById('group-filter-monthly'); 
+        const MONTHLY_FILTER_STORAGE_KEY = 'monthlyGroupFilterState'; 
+        
+        // Filter Grup Harian
+        const dailyGroupFilter = document.getElementById('group-filter-daily');
+        
+        // NEW: Daily Date Filters
+        const dailyDateFrom = document.getElementById('date-filter-daily-from');
+        const dailyDateTo = document.getElementById('date-filter-daily-to');
+
+        // NEW: Monthly Date Filters
+        const monthlyDateFrom = document.getElementById('date-filter-monthly-from');
+        const monthlyDateTo = document.getElementById('date-filter-monthly-to');
+
+        // NEW: Plan Date Filters
+        const planDateFrom = document.getElementById('date-filter-plan-from');
+        const planDateTo = document.getElementById('date-filter-plan-to');
+
+
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const views = document.querySelectorAll('.view-content');
+
+        const imageInput = document.getElementById('image-input');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const captureImageBtn = document.getElementById('capture-image-btn');
+        let currentImageBase64 = null; 
+        
+        // Auth elements
+        const authOverlay = document.getElementById('auth-overlay');
+        const authStatus = document.getElementById('auth-status');
+        const authInstruction = document.getElementById('auth-instruction');
+        const pinInputContainer = document.getElementById('pin-input-container');
+        const pinInput = document.getElementById('pin-input');
+        const pinSubmitBtn = document.getElementById('pin-submit-btn');
+        const togglePinBtn = document.getElementById('toggle-pin-visibility');
+        const appContainer = document.querySelector('.container');
+        const tabs = document.getElementById('tabs');
+        const pinChangeForm = document.getElementById('pin-change-form'); 
+        const resetPinBtn = document.getElementById('reset-pin-btn'); 
+
+        // WhatsApp elements
+        const whatsappSettingForm = document.getElementById('whatsapp-setting-form');
+        const whatsappNumberInput = document.getElementById('whatsapp-number');
+        // MODIFIKASI: Menggunakan IndexedDB untuk menyimpan nomor WA
+        let storedWhatsappNumber = ''; 
+        
+        // Plan Elements
+        const planForm = document.getElementById('plan-form');
+        const plansList = document.getElementById('plans-list');
+        const planEmptyMessage = document.getElementById('plan-empty-message');
+        const planAmountInput = document.getElementById('plan-amount');
+        const planTotalIncomeEl = document.querySelector('#plan-total-income .summary-amount');
+        const planTotalExpenseEl = document.querySelector('#plan-total-expense .summary-amount');
+        const shareAllPlansBtn = document.getElementById('share-all-plans-btn'); 
+
+
+        dateInput.valueAsDate = new Date();
+        typeFilterSelect.addEventListener('change', loadNotes);
+        
+        if(dailyGroupFilter) dailyGroupFilter.addEventListener('change', loadNotes);
+
+        monthlyGroupFilter.addEventListener('change', loadNotes); 
+        
+        // NEW: Event listeners for date filters
+        dailyDateFrom.addEventListener('change', loadNotes);
+        dailyDateTo.addEventListener('change', loadNotes);
+        monthlyDateFrom.addEventListener('change', loadNotes);
+        monthlyDateTo.addEventListener('change', loadNotes);
+        planDateFrom.addEventListener('change', loadPlans);
+        planDateTo.addEventListener('change', loadPlans);
+
+
+        /* ----------------------
+        |  HELPER FUNCTIONS
+        | ---------------------- */
+
+        /**
+         * Formats a number into Rupiah currency string.
+         */
+        function formatRupiah(number) {
+            const absoluteNumber = Math.abs(number);
+            if (isNaN(absoluteNumber)) return '0';
+            return new Intl.NumberFormat('id-ID').format(absoluteNumber);
+        }
+        
+        /**
+         * Cleans a formatted string back to a raw number.
+         */
+        function cleanAmount(formattedString) {
+            const cleanStr = String(formattedString).replace(/\D/g, ''); 
+            return parseInt(cleanStr || '0', 10);
+        }
+
+        function changeTab(tabId) {
+            tabButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-tab') === tabId) {
+                    btn.classList.add('active');
+                }
+            });
+
+            views.forEach(view => {
+                view.classList.remove('active');
+            });
+            const activeView = document.getElementById(tabId);
+            
+            if (activeView) {
+                setTimeout(() => {
+                    activeView.classList.add('active'); 
+                    
+                    if (tabId === 'daily-view' || tabId === 'monthly-summary-view' || tabId === 'new-note-view') {
+                        loadNotes(); 
+                    } else if (tabId === 'plan-view') {
+                        loadPlans();
+                    }
+                    
+                }, 10);
+            }
+        }
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                changeTab(btn.getAttribute('data-tab'));
+            });
+        });
+        
+        /**
+         * Checks if a date string (YYYY-MM-DD) falls between the from/to date filters.
+         */
+        function isDateWithinRange(dateString, fromDate, toDate) {
+            if (!dateString) return true;
+
+            const noteDate = new Date(dateString.substring(0, 10)); 
+
+            if (fromDate) {
+                const from = new Date(fromDate);
+                if (noteDate < from) return false;
+            }
+
+            if (toDate) {
+                const to = new Date(toDate);
+                to.setDate(to.getDate() + 1); 
+                if (noteDate >= to) return false;
+            }
+
+            return true;
+        }
+
+        /**
+         * Sets all date filter inputs to the first and last day of the current month.
+         */
+        function updateDateFiltersToCurrentMonth() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+
+            const firstDay = new Date(year, month, 1);
+            const firstDayString = firstDay.toISOString().substring(0, 10);
+
+            const lastDay = new Date(year, month + 1, 0);
+            const lastDayString = lastDay.toISOString().substring(0, 10);
+
+            dailyDateFrom.value = firstDayString;
+            dailyDateTo.value = lastDayString;
+
+            monthlyDateFrom.value = firstDayString;
+            monthlyDateTo.value = lastDayString;
+
+            planDateFrom.value = firstDayString;
+            planDateTo.value = lastDayString;
+        }
+
+
+        /* ----------------------
+        |  INPUT & IMAGE LOGIC 
+        | ---------------------- */
+
+        amountInput.addEventListener('input', formatAmountInput);
+        amountInput.addEventListener('blur', blurAmountInput);
+        
+        planAmountInput.addEventListener('input', formatAmountInput); 
+        planAmountInput.addEventListener('blur', blurAmountInput);   
+
+        function formatAmountInput(e) {
+             const cursorPosition = e.target.selectionStart;
+             const oldValue = e.target.value;
+             const rawAmount = cleanAmount(oldValue);
+             const formattedValue = formatRupiah(rawAmount);
+
+             e.target.value = formattedValue;
+            
+             const diff = formattedValue.length - oldValue.length;
+             if (cursorPosition + diff >= 0) {
+                 e.target.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
+             }
+        }
+
+        function blurAmountInput(e) {
+            const rawAmount = cleanAmount(e.target.value);
+            if (rawAmount > 0) {
+                e.target.value = formatRupiah(rawAmount);
+            } else {
+                 e.target.value = ''; 
+            }
+        }
+
+        function compressImage(file, quality = 0.7) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        const MAX_HEIGHT = 800;
+                        
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                        resolve(compressedBase64);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        imageInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                
+                if (file.size > 1024 * 5000) { 
+                     alert('File gambar terlalu besar. Batas maksimal file mentah adalah 5MB.');
+                     imageInput.value = '';
+                     removeImage();
+                     return;
+                }
+
+                try {
+                    captureImageBtn.textContent = 'Memproses...';
+                    captureImageBtn.disabled = true;
+
+                    const compressedBase64 = await compressImage(file, 0.7); 
+
+                    currentImageBase64 = compressedBase64;
+                    imagePreview.src = currentImageBase64;
+                    imagePreviewContainer.style.display = 'block';
+                    captureImageBtn.textContent = 'Ganti Foto 🔄';
+                    captureImageBtn.style.backgroundColor = '#1E40AF';
+                    
+                } catch(error) {
+                    alert('Gagal memproses gambar. Silakan coba gambar lain.');
+                    console.error(error);
+                    removeImage();
+                } finally {
+                    captureImageBtn.disabled = false;
+                }
+                
+            } else {
+                removeImage();
+            }
+        });
+
+        window.removeImage = function() {
+            currentImageBase64 = null;
+            imageInput.value = ''; 
+            imagePreview.src = '';
+            imagePreviewContainer.style.display = 'none';
+            captureImageBtn.textContent = 'Tambah Foto 📸';
+            captureImageBtn.style.backgroundColor = '#4B5563';
+        }
+
+        window.showFullImage = function(base64Data) {
+            const modal = document.getElementById('image-modal');
+            const modalImage = document.getElementById('modal-image');
+            
+            modalImage.src = base64Data;
+            modal.style.display = 'block';
+        }
+
+        /* ----------------------
+        |  DAILY SUMMARY & RENDER LOGIC
+        | ---------------------- */
+
+        function getTodayDateString() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        function updateDailySummary(allNotes) {
+            let totalIncome = 0;
+            let totalExpense = 0;
+            
+            const todayDate = getTodayDateString(); 
+
+            // Calculate summary based on transactions recorded TODAY only, regardless of daily list filter
+            const todayNotes = allNotes.filter(note => {
+                const noteDate = (note.date || new Date(parseInt(note.id)).toISOString()).substring(0, 10);
+                return noteDate === todayDate;
+            });
+
+            todayNotes.forEach(note => {
+                if (note.type === 'masuk') {
+                    totalIncome += note.amount;
+                } else if (note.type === 'keluar') {
+                    totalExpense += note.amount;
+                }
+            });
+
+            totalIncomeEl.textContent = `Rp ${formatRupiah(totalIncome)}`;
+            totalExpenseEl.textContent = `Rp ${formatRupiah(totalExpense)}`;
+        }
+
+
+        function createNoteElement(note) {
+            const listItem = document.createElement('li');
+            listItem.className = `note-item ${note.type}`;
+            listItem.dataset.id = note.id;
+
+            const typeLabel = note.type === 'masuk' ? 'Pemasukan' : 'Pengeluaran';
+            const sign = note.type === 'masuk' ? '+' : '-';
+
+            const transactionDate = note.date ? new Date(note.date) : new Date(parseInt(note.id)); 
+            
+            const group = note.group || 'bulanan'; 
+            const groupLabel = group === 'tabungan' ? 'Tabungan 🏦' : 'Bulanan 🗓️'; 
+
+            const imageHtml = note.image ? 
+                `<img src="${note.image}" alt="Bukti Transaksi" class="note-image-icon" onclick="showFullImage('${note.image}')">` : '';
+
+            listItem.innerHTML = `
+                <div class="note-details">
+                    <div class="note-type">${typeLabel} (${transactionDate.toLocaleDateString('id-ID')})</div>
+                    <div class="note-group">Grup: ${groupLabel}</div> 
+                    <div class="note-amount ${note.type}">${sign} Rp ${formatRupiah(note.amount)}</div>
+                    <div class="note-description">${note.note}</div>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    ${imageHtml}
+                    <button class="delete-btn" onclick="deleteNote('${note.id}')" title="Hapus Catatan" style="margin-left: 10px;">
+                        ✖️
+                    </button>
+                </div>
+            `;
+            return listItem;
+        }
+        
+        /* ----------------------
+        |  PLAN LIST LOGIC
+        | ---------------------- */
+
+        // MODIFIKASI: Menggunakan IndexedDB
+        async function getPlans() {
+             const plans = await idbKeyval.get('budgetPlans');
+             return plans || [];
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB
+        async function savePlan(newPlan) {
+            const plans = await getPlans();
+            plans.push(newPlan);
+            await idbKeyval.set('budgetPlans', plans);
+        }
+
+        function createPlanElement(plan) {
+            const listItem = document.createElement('li');
+            listItem.className = `plan-item ${plan.type}`;
+            listItem.dataset.id = plan.id;
+
+            const typeLabel = plan.type === 'masuk' ? 'Target Masuk' : 'Target Keluar';
+            const sign = plan.type === 'masuk' ? '+' : '-';
+            const dateLabel = plan.date ? new Date(plan.date).toLocaleDateString('id-ID') : 'Tidak Ditentukan';
+            
+            listItem.innerHTML = `
+                <div class="note-details">
+                    <div class="note-type">${typeLabel} (Target: ${dateLabel})</div>
+                    <div class="note-amount plan-${plan.type}">${sign} Rp ${formatRupiah(plan.amount)}</div>
+                    <div class="note-description">${plan.note}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                    <button class="delete-btn" onclick="deletePlan('${plan.id}')" title="Hapus Rencana">
+                        ✖️
+                    </button>
+                </div>
+            `;
+            return listItem;
+        }
+
+        function updatePlanSummary(allPlans) {
+            let totalIncome = 0;
+            let totalExpense = 0;
+
+            allPlans.forEach(plan => {
+                if (plan.type === 'masuk') {
+                    totalIncome += plan.amount;
+                } else if (plan.type === 'keluar') {
+                    totalExpense += plan.amount;
+                }
+            });
+
+            planTotalIncomeEl.textContent = `Rp ${formatRupiah(totalIncome)}`;
+            planTotalExpenseEl.textContent = `Rp ${formatRupiah(totalExpense)}`;
+        }
+
+        // MODIFIKASI: Ditandai sebagai async karena menggunakan getPlans()
+        async function loadPlans() {
+            const allPlans = await getPlans();
+            
+            // --- PLAN DATE FILTER ---
+            const planFilterFrom = planDateFrom.value;
+            const planFilterTo = planDateTo.value;
+            
+            let plansToDisplay = allPlans.filter(plan => {
+                const planDateStr = plan.date ? plan.date.substring(0, 10) : null; 
+                return isDateWithinRange(planDateStr, planFilterFrom, planFilterTo);
+            });
+
+            plansToDisplay.sort((a, b) => parseInt(b.id) - parseInt(a.id)); 
+
+            plansList.innerHTML = '';
+            
+            // MODIFIKASI: Menggunakan IndexedDB untuk mendapatkan nomor WA
+            const waNumber = await idbKeyval.get('whatsappNumber');
+            const isWhatsappSet = waNumber && waNumber.length >= 8;
+            
+            if (plansToDisplay.length === 0) {
+                planEmptyMessage.style.display = 'block';
+                shareAllPlansBtn.disabled = true;
+                shareAllPlansBtn.textContent = "Tidak Ada Rencana Untuk Dibagikan";
+            } else {
+                planEmptyMessage.style.display = 'none';
+                plansToDisplay.forEach(plan => {
+                    plansList.appendChild(createPlanElement(plan));
+                });
+                
+                shareAllPlansBtn.disabled = !isWhatsappSet;
+                shareAllPlansBtn.textContent = isWhatsappSet ? "Bagikan Semua Rencana ke WA 💬" : "Atur Nomor WA Dulu! (Tab Atur)";
+            }
+
+            updatePlanSummary(allPlans); 
+        }
+        
+        // MODIFIKASI: Ditandai sebagai async
+        window.deletePlan = async function(id) {
+            if (!confirm('Hapus Rencana? Tindakan ini tidak dapat dibatalkan.')) {
+                return;
+            }
+
+            let plans = await getPlans();
+            plans = plans.filter(plan => plan.id !== id);
+            
+            await idbKeyval.set('budgetPlans', plans);
+            
+            const itemToDelete = document.querySelector(`.plan-item[data-id="${id}"]`);
+            if (itemToDelete) {
+                itemToDelete.style.opacity = '0';
+                itemToDelete.style.transform = 'translateX(-100%)';
+                setTimeout(loadPlans, 250);
+            } else {
+                loadPlans();
+            }
+        }
+        
+        // MODIFIKASI: Menggunakan IndexedDB
+        window.clearAllPlans = async function() {
+            if (confirm('Anda yakin ingin MENGHAPUS SEMUA RENCANA ANGGARAN?')) {
+                await idbKeyval.delete('budgetPlans');
+                alert('Semua rencana anggaran telah dihapus!');
+                loadPlans();
+            }
+        }
+        
+        planForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const type = document.querySelector('input[name="plan-type"]:checked').value;
+            const amount = cleanAmount(planAmountInput.value); 
+            const noteText = document.getElementById('plan-note').value.trim();
+            const transactionDate = document.getElementById('plan-date').value;
+
+            if (amount <= 0 || noteText === '') {
+                alert('Mohon isi semua kolom Jumlah dan Catatan dengan benar.');
+                return;
+            }
+
+            const newPlan = {
+                id: Date.now().toString(), 
+                type: type,
+                amount: amount,
+                note: noteText,
+                date: transactionDate ? new Date(transactionDate).toISOString() : null,
+            };
+
+            await savePlan(newPlan);
+
+            planForm.reset();
+            document.getElementById('plan-masuk').checked = true;
+            planAmountInput.value = ''; 
+
+            loadPlans();
+        });
+
+
+        /* ----------------------
+        |  MAIN LOAD & SAVE LOGIC
+        | ---------------------- */
+
+        function calculateMonthlySummary(notes) {
+            const monthlyData = {};
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+            notes.forEach(note => {
+                const date = new Date(note.date || parseInt(note.id)); 
+                const year = date.getFullYear();
+                const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
+                const monthKey = `${year}-${month}`;
+
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = { 
+                        income: 0, 
+                        expense: 0, 
+                        bulananIncome: 0, 
+                        bulananExpense: 0, 
+                        tabunganIncome: 0, 
+                        tabunganExpense: 0,
+                        monthName: monthNames[date.getMonth()],
+                        year: year
+                    };
+                }
+                
+                const amount = note.amount;
+                const group = note.group || 'bulanan'; 
+
+                if (note.type === 'masuk') {
+                    monthlyData[monthKey].income += amount;
+                    if (group === 'bulanan') monthlyData[monthKey].bulananIncome += amount;
+                    if (group === 'tabungan') monthlyData[monthKey].tabunganIncome += amount;
+                } else {
+                    monthlyData[monthKey].expense += amount;
+                    if (group === 'bulanan') monthlyData[monthKey].bulananExpense += amount;
+                    if (group === 'tabungan') monthlyData[monthKey].tabunganExpense += amount;
+                }
+            });
+
+            // Pastikan pengurutan ASC untuk perhitungan kumulatif
+            const monthKeys = Object.keys(monthlyData).sort(); 
+            
+            let cumulativeTotalBalance = 0;
+            let cumulativeBulananBalance = 0; 
+            let cumulativeTabunganBalance = 0;
+
+            monthKeys.forEach(key => {
+                const data = monthlyData[key];
+                
+                const bulananBalanceBulanIni = data.bulananIncome - data.bulananExpense;
+                const tabunganBalanceBulanIni = data.tabunganIncome - data.tabunganExpense;
+                const totalBalanceBulanIni = data.income - data.expense;
+
+                cumulativeTotalBalance += totalBalanceBulanIni;
+                cumulativeBulananBalance += bulananBalanceBulanIni;
+                cumulativeTabunganBalance += tabunganBalanceBulanIni;
+
+                data.totalBalanceBulanIni = totalBalanceBulanIni;
+                data.bulananBalanceBulanIni = bulananBalanceBulanIni;
+                data.tabunganBalanceBulanIni = tabunganBalanceBulanIni;
+                
+                data.cumulativeTotalBalance = cumulativeTotalBalance;
+                data.cumulativeBulananBalance = cumulativeBulananBalance;
+                data.cumulativeTabunganBalance = cumulativeTabunganBalance;
+            });
+
+            return monthlyData;
+        }
+
+        function renderMonthlySummary(monthlyData) {
+            monthlyList.innerHTML = '';
+            
+            const filterType = monthlyGroupFilter.value; 
+
+            // Urutkan DESC untuk tampilan daftar bulanan terbaru di atas
+            const monthKeys = Object.keys(monthlyData).sort().reverse(); 
+            
+            if (monthKeys.length === 0) {
+                emptyMessageMonthly.style.display = 'block';
+                return;
+            }
+            emptyMessageMonthly.style.display = 'none';
+
+            // MODIFIKASI: Menggunakan IndexedDB untuk mendapatkan nomor WA
+            let isWhatsappSet = false;
+            idbKeyval.get('whatsappNumber').then(waNumber => {
+                isWhatsappSet = waNumber && waNumber.length >= 8;
+                // Re-render jika perlu, atau pastikan data isWhatsappSet diperbarui
+            });
+            
+            let totalCardsRendered = 0; 
+
+            monthKeys.forEach(key => {
+                const data = monthlyData[key];
+                
+                let incomeBulanIni = 0;
+                let expenseBulanIni = 0;
+                let saldoBulanIni = 0;
+                let saldoKumulatif = 0;
+                let groupLabel = '';
+                
+                if (filterType === 'all') {
+                    incomeBulanIni = data.income;
+                    expenseBulanIni = data.expense;
+                    saldoBulanIni = data.totalBalanceBulanIni;
+                    saldoKumulatif = data.cumulativeTotalBalance;
+                    groupLabel = 'Semua Grup';
+                } else if (filterType === 'bulanan') {
+                    incomeBulanIni = data.bulananIncome;
+                    expenseBulanIni = data.bulananExpense;
+                    saldoBulanIni = data.bulananBalanceBulanIni;
+                    saldoKumulatif = data.cumulativeBulananBalance;
+                    groupLabel = 'Grup Bulanan';
+                } else if (filterType === 'tabungan') {
+                    incomeBulanIni = data.tabunganIncome;
+                    expenseBulanIni = data.tabunganExpense;
+                    saldoBulanIni = data.tabunganBalanceBulanIni;
+                    saldoKumulatif = data.cumulativeTabunganBalance;
+                    groupLabel = 'Grup Tabungan';
+                }
+
+                if (incomeBulanIni === 0 && expenseBulanIni === 0 && filterType !== 'all') {
+                    return; 
+                }
+                
+                totalCardsRendered++; 
+
+                const listItem = document.createElement('li');
+                listItem.className = 'monthly-card';
+                
+                // Pastikan status tombol WA diperbarui saat elemen dibuat
+                idbKeyval.get('whatsappNumber').then(waNumber => {
+                    const isWaSet = waNumber && waNumber.length >= 8;
+
+                    listItem.innerHTML = `
+                        <span class="month-header">${data.monthName} ${data.year} (${groupLabel})</span>
+                        <div class="month-details">
+                            <div>
+                                <span>Pemasukan Bulan Ini:</span>
+                                <span class="income">+ Rp ${formatRupiah(incomeBulanIni)}</span>
+                            </div>
+                            <div style="border-bottom: 1px dashed var(--color-border); padding-bottom: 10px; margin-bottom: 5px;">
+                                <span>Pengeluaran Bulan Ini:</span>
+                                <span class="expense">- Rp ${formatRupiah(expenseBulanIni)}</span>
+                            </div>
+                            
+                            <div class="balance" style="margin-top: 15px;">
+                                <span>**Saldo Bulan Ini (${groupLabel}):**</span>
+                                <span class="${saldoBulanIni >= 0 ? 'positive' : 'negative'}">${saldoBulanIni >= 0 ? '+' : ''} Rp ${formatRupiah(saldoBulanIni)}</span>
+                            </div>
+                            <div class="balance">
+                                <span>**Saldo Kumulatif (${groupLabel}):**</span>
+                                <span class="${saldoKumulatif >= 0 ? 'positive' : 'negative'}">${saldoKumulatif >= 0 ? '+' : ''} Rp ${formatRupiah(saldoKumulatif)}</span>
+                            </div>
+                        </div>
+                        
+                        <button type="button" 
+                            class="submit-btn share-wa-btn" 
+                            style="margin-top: 15px; font-size: 16px; padding: 10px;" 
+                            data-month-key="${key}"
+                            data-filter-type="${filterType}"
+                            ${isWaSet ? '' : 'disabled title="Atur nomor WhatsApp di tab Atur dulu"'}
+                            onclick="shareMonthlySummaryToWa(this)">
+                            ${isWaSet ? `Bagikan Ringkasan ke WA 💬` : `Setel Nomor WA Dulu!`}
+                        </button>
+                    `;
+                    monthlyList.appendChild(listItem);
+                });
+            });
+            
+            if (totalCardsRendered === 0 && monthKeys.length > 0) {
+                 emptyMessageMonthly.style.display = 'block';
+                 const currentGroup = filterType === 'bulanan' ? 'Bulanan 🗓️' : 'Tabungan 🏦';
+                 emptyMessageMonthly.textContent = `Tidak ada transaksi tercatat untuk *${currentGroup}* pada periode yang ada dengan filter tanggal saat ini.`;
+            } else if (monthKeys.length === 0) {
+                 emptyMessageMonthly.textContent = `Belum ada data untuk ringkasan bulanan.`;
+            }
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        async function getNotes() {
+            const notes = await idbKeyval.get('budgetNotes');
+            return notes || [];
+        }
+
+        // MODIFIKASI: Ditandai sebagai async karena menggunakan getNotes()
+        async function loadNotes() {
+            const allNotes = await getNotes();
+            
+            // MODIFIKASI: Menggunakan IndexedDB untuk filter bulanan
+            const savedFilter = await idbKeyval.get(MONTHLY_FILTER_STORAGE_KEY);
+            if(savedFilter) monthlyGroupFilter.value = savedFilter;
+            await idbKeyval.set(MONTHLY_FILTER_STORAGE_KEY, monthlyGroupFilter.value);
+            
+            const typeFilter = typeFilterSelect.value;
+            const groupFilter = dailyGroupFilter ? dailyGroupFilter.value : 'all'; 
+            
+            // --- DAILY DATE FILTER (For the list displayed on 'daily-view') ---
+            const dailyFilterFrom = dailyDateFrom.value;
+            const dailyFilterTo = dailyDateTo.value;
+
+            let notesToDisplay = allNotes;
+            
+            // Apply all filters for the display list
+            notesToDisplay = notesToDisplay.filter(note => {
+                const noteGroup = note.group || 'bulanan';
+                const noteDateStr = note.date ? note.date.substring(0, 10) : new Date(parseInt(note.id)).toISOString().substring(0, 10);
+                
+                const typeMatch = typeFilter === 'all' || note.type === typeFilter;
+                const groupMatch = groupFilter === 'all' || noteGroup === groupFilter;
+                const dateMatch = isDateWithinRange(noteDateStr, dailyFilterFrom, dailyFilterTo);
+                
+                return typeMatch && groupMatch && dateMatch;
+            });
+
+
+            notesToDisplay.sort((a, b) => parseInt(b.id) - parseInt(a.id));
+            
+            notesList.innerHTML = ''; 
+            if (notesToDisplay.length === 0) {
+                emptyMessageDaily.style.display = 'block';
+                emptyMessageDaily.textContent = `Tidak ada catatan untuk filter ${typeFilter === 'all' ? '' : typeFilter} / ${groupFilter === 'all' ? 'Semua Grup' : groupFilter === 'bulanan' ? 'Bulanan' : 'Tabungan'} pada rentang tanggal ini.`;
+            } else {
+                emptyMessageDaily.style.display = 'none';
+                notesToDisplay.forEach(note => {
+                    notesList.appendChild(createNoteElement(note));
+                });
+            }
+            
+            updateDailySummary(allNotes); 
+
+            // --- MONTHLY DATE FILTER (For the summary generation) ---
+            const monthlyFilterFrom = monthlyDateFrom.value;
+            const monthlyFilterTo = monthlyDateTo.value;
+            
+            let monthlySummaryNotes = allNotes.filter(note => {
+                const noteDateStr = note.date ? note.date.substring(0, 10) : new Date(parseInt(note.id)).toISOString().substring(0, 10);
+                return isDateWithinRange(noteDateStr, monthlyFilterFrom, monthlyFilterTo);
+            });
+
+            const monthlyData = calculateMonthlySummary(monthlySummaryNotes);
+            
+            const latestMonthKey = Object.keys(monthlyData).sort().pop();
+            const latestData = monthlyData[latestMonthKey];
+
+            if (latestData) {
+                const total = latestData.cumulativeTotalBalance;
+                const totalColor = total < 0 ? 'var(--color-expense)' : 'var(--color-primary-accent)';
+                cumulativeTotalEl.textContent = `${total < 0 ? '-' : ''} Rp ${formatRupiah(total)}`;
+                cumulativeTotalEl.style.color = totalColor;
+                document.getElementById('cumulative-balance-total').style.borderColor = totalColor;
+                
+                const bulanan = latestData.cumulativeBulananBalance;
+                const bulananColor = bulanan < 0 ? 'var(--color-expense)' : '#FF9800';
+                cumulativeBulananEl.textContent = `${bulanan < 0 ? '-' : ''} Rp ${formatRupiah(bulanan)}`;
+                cumulativeBulananEl.style.color = bulananColor;
+                document.getElementById('cumulative-balance-bulanan').style.borderColor = bulananColor;
+
+                const tabungan = latestData.cumulativeTabunganBalance;
+                const tabunganColor = tabungan < 0 ? 'var(--color-expense)' : '#2196F3';
+                cumulativeTabunganEl.textContent = `${tabungan < 0 ? '-' : ''} Rp ${formatRupiah(tabungan)}`;
+                cumulativeTabunganEl.style.color = tabunganColor;
+                document.getElementById('cumulative-balance-tabungan').style.borderColor = tabunganColor;
+
+            } else {
+                cumulativeTotalEl.textContent = 'Rp 0';
+                cumulativeBulananEl.textContent = 'Rp 0';
+                cumulativeTabunganEl.textContent = 'Rp 0';
+                
+                cumulativeTotalEl.style.color = 'var(--color-primary-accent)';
+                document.getElementById('cumulative-balance-total').style.borderColor = 'var(--color-primary-accent)';
+                cumulativeBulananEl.style.color = '#FF9800';
+                document.getElementById('cumulative-balance-bulanan').style.borderColor = '#FF9800';
+                cumulativeTabunganEl.style.color = '#2196F3';
+                document.getElementById('cumulative-balance-tabungan').style.borderColor = '#2196F3';
+            }
+
+            renderMonthlySummary(monthlyData);
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB
+        async function saveNote(newNote) {
+            const notes = await getNotes();
+            notes.push(newNote);
+            await idbKeyval.set('budgetNotes', notes);
+            
+            // Simpan grup terakhir yang dipilih (menggunakan localStorage untuk key ini tidak masalah)
+            await idbKeyval.set(LAST_GROUP_KEY, newNote.group);
+        }
+        
+        // MODIFIKASI: Ditandai sebagai async
+        window.deleteNote = async function(id) {
+            if (!confirm('Hapus Transaksi? Tindakan ini tidak dapat dibatalkan.')) {
+                return;
+            }
+
+            let notes = await getNotes();
+            
+            notes = notes.filter(note => note.id !== id);
+            
+            await idbKeyval.set('budgetNotes', notes);
+            
+            const itemToDelete = document.querySelector(`.note-item[data-id="${id}"]`);
+            if (itemToDelete) {
+                itemToDelete.style.opacity = '0';
+                itemToDelete.style.transform = 'translateX(-100%)';
+                setTimeout(() => {
+                    loadNotes(); 
+                }, 250);
+            } else {
+                loadNotes();
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const amount = cleanAmount(amountInput.value); 
+            const noteText = document.getElementById('note').value.trim();
+            const transactionDate = dateInput.value;
+            const group = document.getElementById('group').value; 
+
+            if (amount <= 0 || noteText === '' || transactionDate === '') {
+                alert('Mohon isi semua kolom dengan benar (Jumlah harus lebih dari 0 dan tanggal harus dipilih).');
+                return;
+            }
+            
+            const currentNotes = await getNotes();
+            const totalIncome = currentNotes.filter(n => n.type === 'masuk').reduce((sum, n) => sum + n.amount, 0);
+            const totalExpense = currentNotes.filter(n => n.type === 'keluar').reduce((sum, n) => sum + n.amount, 0);
+            const currentBalance = totalIncome - totalExpense;
+
+            if (type === 'keluar') {
+                const projectedBalance = currentBalance - amount;
+                const warningThreshold = -50000; 
+                
+                if (projectedBalance < warningThreshold) {
+                    const confirmed = confirm(`PERINGATAN! Transaksi ini akan membuat saldo Anda menjadi minus Rp ${formatRupiah(Math.abs(projectedBalance))}.\n\nAnda yakin ingin melanjutkan pencatatan pengeluaran ini?`);
+                    if (!confirmed) {
+                        return; 
+                    }
+                }
+            }
+
+            const newNote = {
+                id: Date.now().toString(), 
+                type: type,
+                amount: amount,
+                note: noteText,
+                date: new Date(transactionDate).toISOString(),
+                image: currentImageBase64,
+                group: group 
+            };
+
+            await saveNote(newNote);
+
+            form.reset();
+            document.getElementById('masuk').checked = true;
+            dateInput.valueAsDate = new Date();
+            amountInput.value = ''; 
+            typeFilterSelect.value = 'all';
+
+            removeImage(); 
+
+            loadNotes();
+            changeTab('new-note-view'); // Tetap di tab Catat untuk kemudahan input
+        });
+
+        /* ----------------------
+        |  EXPORT CSV LOGIC 
+        | ---------------------- */
+
+        // MODIFIKASI: Ditandai sebagai async
+        window.exportMonthlySummary = async function() {
+            const allNotes = await getNotes();
+
+            if (allNotes.length === 0) {
+                alert("Tidak ada data transaksi untuk diekspor.");
+                return;
+            }
+
+            const monthlyData = calculateMonthlySummary(allNotes); 
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            
+            const monthKeys = Object.keys(monthlyData).sort().reverse(); 
+            
+            let csvContent = "Bulan,Pemasukan Total (Rp),Pengeluaran Total (Rp),Saldo Bulan Ini (Rp),Pemasukan Bulanan (Rp),Pengeluaran Bulanan (Rp),Pemasukan Tabungan (Rp),Pengeluaran Tabungan (Rp)\n";
+
+            monthKeys.forEach(key => {
+                const [year, monthIndex] = key.split('-');
+                const monthName = monthNames[parseInt(monthIndex, 10) - 1];
+                const data = monthlyData[key];
+                const balance = data.income - data.expense;
+
+                const line = `${monthName} ${year},${data.income},${data.expense},${balance},${data.bulananIncome},${data.bulananExpense},${data.tabunganIncome},${data.tabunganExpense}\n`;
+                csvContent += line;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            const dateStamp = new Date().toISOString().substring(0, 10);
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `RingkasanAnggaran_${dateStamp}.csv`);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("Data ringkasan berhasil diekspor ke CSV!");
+        }
+        
+        /* ----------------------
+        |  EXPORT/IMPORT RAW DATA & CLEAR (TAB ATUR)
+        | ---------------------- */
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        window.exportRawData = async function() {
+            const notes = await getNotes();
+            const plans = await getPlans();
+            
+            const exportData = {
+                notes: notes,
+                plans: plans,
+                metadata: {
+                     whatsappNumber: await idbKeyval.get('whatsappNumber') || '',
+                     appPin: await idbKeyval.get('appPin') || '',
+                     lastSelectedGroup: await idbKeyval.get(LAST_GROUP_KEY) || 'bulanan',
+                     timestamp: new Date().toISOString()
+                }
+            };
+            
+            if (exportData.notes.length === 0 && exportData.plans.length === 0) {
+                alert("Tidak ada data yang dapat diekspor.");
+                return null; 
+            }
+            
+            const exportJSON = JSON.stringify(exportData, null, 2);
+
+            const blob = new Blob([exportJSON], { type: 'application/json' });
+            const link = document.createElement("a");
+            const dateStamp = new Date().toISOString().substring(0, 10);
+            
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `DataAnggaranMentah_${dateStamp}.json`);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            if (document.getElementById('settings-view').classList.contains('active')) {
+                 alert("Data mentah (JSON) berhasil diekspor! Gunakan file ini untuk Impor data di perangkat lain.");
+            }
+
+            return exportJSON;
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        window.importRawData = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!confirm('PERINGATAN! Impor data akan MENIMPA SEMUA data transaksi dan rencana yang ada saat ini. Lanjutkan?')) {
+                event.target.value = ''; 
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    if (typeof importedData !== 'object' || !importedData.notes) {
+                        throw new Error("Struktur file JSON tidak valid.");
+                    }
+                    
+                    // Simpan data ke IndexedDB
+                    await idbKeyval.set('budgetNotes', importedData.notes);
+                    
+                    if (importedData.plans) {
+                         await idbKeyval.set('budgetPlans', importedData.plans);
+                    }
+                    
+                    // Impor metadata
+                    if (importedData.metadata) {
+                        if (importedData.metadata.whatsappNumber) {
+                            await idbKeyval.set('whatsappNumber', importedData.metadata.whatsappNumber);
+                            storedWhatsappNumber = importedData.metadata.whatsappNumber;
+                            if (whatsappNumberInput) whatsappNumberInput.value = storedWhatsappNumber;
+                        }
+                        if (importedData.metadata.appPin) {
+                            await idbKeyval.set('appPin', importedData.metadata.appPin);
+                        }
+                        if (importedData.metadata.lastSelectedGroup) {
+                            await idbKeyval.set(LAST_GROUP_KEY, importedData.metadata.lastSelectedGroup);
+                            groupInput.value = importedData.metadata.lastSelectedGroup;
+                        }
+                    }
+                    
+
+                    alert(`Data (${importedData.notes.length} catatan dan ${importedData.plans ? importedData.plans.length : 0} rencana) berhasil diimpor dan menimpa data lama!`);
+                    loadNotes();
+                    loadPlans();
+                    changeTab('daily-view'); 
+                } catch (error) {
+                    alert('Gagal mengimpor file. Pastikan file berformat JSON yang benar. Error: ' + error.message);
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        window.clearAllData = async function() {
+            if (confirm('SANGAT PENTING: Anda yakin ingin MENGHAPUS SEMUA DATA TRANSAKSI DAN RENCANA Anda? Tindakan ini tidak dapat dibatalkan. Pastikan Anda sudah melakukan Ekspor (Backup)!')) {
+                // Hapus semua keys dari IndexedDB
+                await idbKeyval.delete('budgetNotes');
+                await idbKeyval.delete('budgetPlans'); 
+                await idbKeyval.delete('whatsappNumber'); 
+                await idbKeyval.delete('appPin');
+                await idbKeyval.delete(LAST_GROUP_KEY); 
+                
+                storedWhatsappNumber = '';
+                if (whatsappNumberInput) whatsappNumberInput.value = '';
+                
+                alert('Semua data transaksi dan rencana telah dihapus!');
+                loadNotes();
+                loadPlans();
+                changeTab('daily-view');
+            }
+        }
+        
+        /* ----------------------
+        |  WHATSAPP SHARING LOGIC
+        | ---------------------- */
+        
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        whatsappSettingForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const newNumber = whatsappNumberInput.value.trim().replace(/[^0-9]/g, ''); 
+
+            if (!newNumber || newNumber.length < 8) {
+                alert('Mohon masukkan Nomor WhatsApp yang valid (minimal 8 digit).');
+                return;
+            }
+            
+            storedWhatsappNumber = newNumber;
+            await idbKeyval.set('whatsappNumber', storedWhatsappNumber);
+            alert('Nomor WhatsApp berhasil disimpan!');
+            
+            loadNotes(); 
+            loadPlans(); 
+        });
+        
+        /**
+         * Mengkompilasi dan membagikan SEMUA rencana ke WhatsApp dengan format ringkas.
+         */
+        // MODIFIKASI: Ditandai sebagai async
+        window.shareAllPlansToWa = async function() {
+            const waNumber = await idbKeyval.get('whatsappNumber');
+            if (!waNumber || waNumber.length < 8) {
+                alert('Nomor WhatsApp tujuan belum diatur. Silakan atur di tab "Atur" terlebih dahulu.');
+                changeTab('settings-view');
+                return;
+            }
+            
+            const plans = await getPlans(); 
+
+            if (plans.length === 0) {
+                alert('Tidak ada rencana anggaran yang tersimpan untuk dibagikan.');
+                return;
+            }
+            
+            let totalIncome = 0;
+            let totalExpense = 0;
+            const incomeDetails = []; 
+            const expenseDetails = []; 
+
+            plans.sort((a, b) => parseInt(b.id) - parseInt(a.id)); 
+            
+            plans.forEach(plan => {
+                if (plan.type === 'masuk') {
+                    totalIncome += plan.amount;
+                    incomeDetails.push(`${plan.note} (+Rp ${formatRupiah(plan.amount)})`); 
+                } else {
+                    totalExpense += plan.amount;
+                    expenseDetails.push(`${plan.note} (-Rp ${formatRupiah(plan.amount)})`);
+                }
+            });
+
+            let numberedIncomeList = '';
+            if (incomeDetails.length > 0) {
+                numberedIncomeList = incomeDetails.map((detail, index) => 
+                    `${index + 1}. ${detail}`
+                ).join('\n');
+            } else {
+                 numberedIncomeList = 'Tidak ada target pemasukan tercatat.';
+            }
+
+            let numberedExpenseList = '';
+            if (expenseDetails.length > 0) {
+                numberedExpenseList = expenseDetails.map((detail, index) => 
+                    `${index + 1}. ${detail}`
+                ).join('\n'); 
+            } else {
+                 numberedExpenseList = 'Tidak ada target pengeluaran tercatat.';
+            }
+
+            const message = `*🎯 Daftar Rencana Anggaran*\n` +
+                            `_Tanggal Laporan: ${new Date().toLocaleDateString('id-ID')}_\n\n` +
+                            `=================================\n` +
+                            `💰 *TOTAL TARGET MASUK:* +Rp ${formatRupiah(totalIncome)}\n` +
+                            `💸 *TOTAL TARGET PENGELUARAN:* -Rp ${formatRupiah(totalExpense)}\n` +
+                            `=================================\n\n` +
+                            `*DETAIL RENCANA MASUK:*\n` + 
+                            `${numberedIncomeList}\n\n` + 
+                            `*DETAIL RENCANA KELUAR:*\n` +
+                            `${numberedExpenseList}\n\n` +
+                            `_Dibagikan dari Catatan Anggaran Sederhana_ 📝`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const waUrl = `https://wa.me/${waNumber}?text=${encodedMessage}`;
+            
+            window.open(waUrl, '_blank');
+        }
+
+        /**
+         * Mengambil dan memformat detail transaksi untuk bulan tertentu.
+         */
+        function getMonthlyTransactionDetails(monthKey, notesInMonth) {
+            
+            notesInMonth.sort((a, b) => {
+                const dateA = new Date(a.date || parseInt(a.id));
+                const dateB = new Date(b.date || parseInt(b.id));
+                return dateB.getTime() - dateA.getTime();
+            });
+
+            let detailMessage = "*Detail Transaksi:*\n";
+
+            if (notesInMonth.length === 0) {
+                return detailMessage + "   - Tidak ada catatan detail di grup ini.";
+            }
+
+            notesInMonth.forEach(note => {
+                const sign = note.type === 'masuk' ? '+' : '-';
+                const groupLabel = note.group === 'tabungan' ? '(Tabungan)' : '(Bulanan)';
+                const date = new Date(note.date || parseInt(note.id));
+                const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                
+                const line = `   [${formattedDate}] *${note.note}* ${groupLabel}: ${sign}Rp ${formatRupiah(note.amount)}\n`;
+                detailMessage += line;
+            });
+            
+            return detailMessage;
+        }
+
+        /**
+         * Memformat pesan dan memicu berbagi ke WhatsApp.
+         */
+        // MODIFIKASI: Ditandai sebagai async
+        window.shareMonthlySummaryToWa = async function(buttonElement) {
+            const waNumber = await idbKeyval.get('whatsappNumber');
+            if (!waNumber || waNumber.length < 8) {
+                alert('Nomor WhatsApp tujuan belum diatur. Silakan atur di tab "Atur" terlebih dahulu.');
+                return;
+            }
+
+            const monthKey = buttonElement.getAttribute('data-month-key');
+            const filterType = buttonElement.getAttribute('data-filter-type'); 
+            
+            const allNotes = await getNotes();
+            
+            const monthlyFilterFrom = monthlyDateFrom.value;
+            const monthlyFilterTo = monthlyDateTo.value;
+            
+            let monthlySummaryNotes = allNotes.filter(note => {
+                const noteDateStr = note.date ? note.date.substring(0, 10) : new Date(parseInt(note.id)).toISOString().substring(0, 10);
+                return isDateWithinRange(noteDateStr, monthlyFilterFrom, monthlyFilterTo);
+            });
+            
+            const monthlyData = calculateMonthlySummary(monthlySummaryNotes);
+            
+            const data = monthlyData[monthKey];
+            if (!data) return; 
+            
+            const [year, monthIndex] = monthKey.split('-');
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            const monthName = monthNames[parseInt(monthIndex, 10) - 1];
+
+            let incomeBulanIni = 0;
+            let expenseBulanIni = 0;
+            let saldoBulanIni = 0;
+            let saldoKumulatif = 0;
+            let groupLabel = '';
+            
+            if (filterType === 'all') {
+                incomeBulanIni = data.income;
+                expenseBulanIni = data.expense;
+                saldoBulanIni = data.totalBalanceBulanIni;
+                saldoKumulatif = data.cumulativeTotalBalance;
+                groupLabel = 'Semua Grup';
+            } else if (filterType === 'bulanan') {
+                incomeBulanIni = data.bulananIncome;
+                expenseBulanIni = data.bulananExpense;
+                saldoBulanIni = data.bulananBalanceBulanIni;
+                saldoKumulatif = data.cumulativeBulananBalance;
+                groupLabel = 'Grup Bulanan';
+            } else if (filterType === 'tabungan') {
+                incomeBulanIni = data.tabunganIncome;
+                expenseBulanIni = data.tabunganExpense;
+                saldoBulanIni = data.tabunganBalanceBulanIni;
+                saldoKumulatif = data.cumulativeTabunganBalance;
+                groupLabel = 'Grup Tabungan';
+            }
+            
+            const filteredNotes = monthlySummaryNotes.filter(note => {
+                const noteGroup = note.group || 'bulanan';
+                const date = new Date(note.date || parseInt(note.id)); 
+                const noteYear = date.getFullYear();
+                const noteMonth = (date.getMonth() + 1).toString().padStart(2, '0');
+                const noteMonthKey = `${noteYear}-${noteMonth}`;
+
+                if (noteMonthKey !== monthKey) return false;
+                
+                if (filterType === 'all') return true;
+                return noteGroup === filterType;
+            });
+            
+            const transactionDetails = getMonthlyTransactionDetails(monthKey, filteredNotes);
+
+
+            const message = `*📊 Ringkasan Anggaran Bulan ${monthName} ${year} (${groupLabel})*\n\n` +
+                            `➡️ *Pemasukan Bulan Ini:* +Rp ${formatRupiah(incomeBulanIni)}\n` +
+                            `⬅️ *Pengeluaran Bulan Ini:* -Rp ${formatRupiah(expenseBulanIni)}\n` +
+                            `---------------------------------\n` +
+                            `*Saldo Bulan Ini:* ${saldoBulanIni >= 0 ? '+' : ''}Rp ${formatRupiah(saldoBulanIni)}\n\n` +
+                            
+                            `*Saldo Kumulatif (${groupLabel}):* ${saldoKumulatif >= 0 ? '+' : ''}Rp ${formatRupiah(saldoKumulatif)}\n` +
+                            `*Rentang Tanggal di Ringkasan:* ${monthlyFilterFrom || 'Awal Data'} hingga ${monthlyFilterTo || 'Akhir Data'}\n` +
+                            `=================================\n\n` +
+                            
+                            `${transactionDetails}\n` + 
+                            `=================================\n` +
+                            `_Dibagikan dari Catatan Anggaran Sederhana_ 📝`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const waUrl = `https://wa.me/${waNumber}?text=${encodedMessage}`;
+            
+            window.open(waUrl, '_blank');
+        }
+
+
+        /* ----------------------
+        |  PIN MANAGEMENT & AUTHENTICATION LOGIC
+        | ---------------------- */
+
+        togglePinBtn.addEventListener('click', () => {
+            const isPassword = pinInput.type === 'password';
+            pinInput.type = isPassword ? 'text' : 'password';
+            
+            togglePinBtn.textContent = isPassword ? '🙈' : '👁️';
+            
+            pinInput.focus();
+        });
+
+        function generatePin() {
+            let pin = '';
+            for (let i = 0; i < 6; i++) {
+                pin += Math.floor(Math.random() * 10);
+            }
+            return pin;
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        async function getPin() {
+            return await idbKeyval.get('appPin');
+        }
+
+        // MODIFIKASI: Menggunakan IndexedDB dan ditandai sebagai async
+        async function setPin(newPin) {
+            await idbKeyval.set('appPin', newPin);
+        }
+
+        // MODIFIKASI: Ditandai sebagai async
+        async function validatePin() {
+            const enteredPin = pinInput.value.trim();
+            const storedPin = await getPin();
+
+            if (enteredPin.length === 6 && enteredPin === storedPin) {
+                authStatus.textContent = "PIN Benar! Membuka kunci...";
+                authStatus.style.color = 'var(--color-income)';
+                setTimeout(unlockApp, 500);
+            } else {
+                authStatus.textContent = "PIN salah. Coba lagi.";
+                authStatus.style.color = 'var(--color-expense)';
+                pinInput.value = '';
+                pinInput.focus();
+            }
+        }
+        
+        // MODIFIKASI: Ditandai sebagai async
+        window.handlePinReset = async function() {
+            const confirmReset = confirm(
+                "PERINGATAN! Anda akan mereset PIN. Tindakan ini akan:\n" +
+                "1. **Mengekspor** data transaksi ke file backup JSON (untuk pengamanan data Anda).\n" +
+                "2. **Menghapus SEMUA** data transaksi dan rencana yang ada (termasuk PIN lama) dari aplikasi.\n\n" +
+                "Lanjutkan?"
+            );
+
+            if (!confirmReset) {
+                return;
+            }
+            
+            await exportRawData(); 
+            
+            // Hapus semua data dari IndexedDB
+            await idbKeyval.delete('budgetNotes');
+            await idbKeyval.delete('budgetPlans'); 
+            await idbKeyval.delete('appPin');
+            await idbKeyval.delete('whatsappNumber'); 
+            await idbKeyval.delete(LAST_GROUP_KEY); 
+
+            const newPin = generatePin();
+            await setPin(newPin);
+            
+            storedWhatsappNumber = '';
+            if (whatsappNumberInput) whatsappNumberInput.value = '';
+
+            authOverlay.style.backgroundColor = 'var(--color-background)'; 
+            authInstruction.textContent = `RESET BERHASIL. PIN BARU Anda adalah: ${newPin}.`;
+            authStatus.textContent = "Data lama sudah dihapus. Silakan gunakan PIN baru di atas untuk masuk.";
+            authStatus.style.color = 'var(--color-expense)';
+            
+            pinInput.value = newPin;
+            pinInput.focus();
+            
+            alert(`PENTING! PIN baru Anda adalah: ${newPin}\n\nData lama di aplikasi telah dihapus. Harap catat PIN baru ini dan cek folder download Anda untuk file backup data (JSON).`);
+        }
+        
+        pinSubmitBtn.addEventListener('click', validatePin);
+        pinInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                validatePin();
+            }
+        });
+        pinInput.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/\D/g, '').substring(0, 6);
+        });
+
+
+        // MODIFIKASI: Ditandai sebagai async
+        pinChangeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const newPinInput = document.getElementById('new-pin');
+            const newPin = newPinInput.value;
+            
+            if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+                alert('PIN harus berupa 6 digit angka.');
+                return;
+            }
+            
+            await setPin(newPin);
+            alert('PIN Akses berhasil diubah!');
+            pinChangeForm.reset();
+        });
+
+
+        // MODIFIKASI: Ditandai sebagai async
+        async function unlockApp() {
+            authOverlay.style.display = 'none';
+            appContainer.style.display = 'block';
+            tabs.style.display = 'flex';
+            
+            // Ambil data dari IndexedDB
+            const lastGroup = await idbKeyval.get(LAST_GROUP_KEY);
+            const waNumber = await idbKeyval.get('whatsappNumber');
+            const savedFilter = await idbKeyval.get(MONTHLY_FILTER_STORAGE_KEY);
+            
+            if (lastGroup && groupInput) {
+                 groupInput.value = lastGroup;
+            } else if (groupInput) {
+                 groupInput.value = 'bulanan';
+            }
+            
+            storedWhatsappNumber = waNumber || '';
+            if (whatsappNumberInput) whatsappNumberInput.value = storedWhatsappNumber;
+
+            if (savedFilter) {
+                 monthlyGroupFilter.value = savedFilter;
+            }
+            
+            loadNotes();
+            loadPlans();
+            changeTab('new-note-view'); // Tampilkan tab Catat setelah unlock
+        }
+
+        // --- Initial Load (Setup PIN & Start Auth) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            
+             updateDateFiltersToCurrentMonth();
+
+             const currentPin = await getPin();
+             
+             if (!currentPin) {
+                const defaultPin = generatePin();
+                await setPin(defaultPin);
+                
+                authInstruction.textContent = `PIN Akses Default Anda: ${defaultPin}. Silakan masukkan PIN di bawah untuk masuk.`;
+                authStatus.textContent = "PIN baru telah dibuat. Harap catat PIN ini!";
+                authStatus.style.color = 'var(--color-income)';
+                
+                if (!sessionStorage.getItem('defaultPinAlertShown')) {
+                     alert(`SELAMAT DATANG! Ini adalah PIN akses default Anda: ${defaultPin}\n\nCATAT PIN INI! Anda dapat mengubahnya di tab 'Atur'.`);
+                     sessionStorage.setItem('defaultPinAlertShown', 'true');
+                }
+             } else {
+                authInstruction.textContent = `Masukkan PIN Akses 6 Digit Anda:`;
+                authStatus.textContent = "Siap menerima PIN.";
+                authStatus.style.color = 'var(--color-text-dark)';
+             }
+             
+             appContainer.style.display = 'none';
+             tabs.style.display = 'none';
+
+             // Memuat nomor WA dan filter saat unlock
+             
+             pinInput.focus();
+             
+             // Inisialisasi tampilan awal
+             changeTab('new-note-view'); 
+        });
+    </script>
+</body>
+</html>
